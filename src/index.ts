@@ -1,11 +1,20 @@
-import express from "express";
+import express, { Request, Response } from "express";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
+const port = process.env.PORT || 3000;
+app.use(express.json());
 
-const PORT = 8000;
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: "Your server is up and running....",
+  });
+});
 
-app.listen(PORT);
-
-app.get("/", (req, res) => {
-  res.send("server is running");
+app.listen(port, () => {
+  console.log(
+    `Listening on port ${port}. Visit http://localhost:${port}/ in your browser.`
+  );
 });
