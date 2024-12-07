@@ -4,10 +4,11 @@ import bcrypt from "bcryptjs";
 import { registerSchema } from "../schema/register";
 import { loginSchema } from "../schema/login";
 import { uploadImageToCloudinary } from "../lib/upload-image";
+import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 dotenv.config();
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.safeParse(req.body);
 
@@ -96,8 +97,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      data: user,
       message: "User created successfully",
+      data: user,
     });
   } catch (error: unknown) {
     res.status(500).json({
@@ -108,7 +109,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response) => {
   try {
     const validatedData = loginSchema.safeParse(req.body);
     if (!validatedData.success) {
@@ -117,7 +118,56 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         message: "Validation failed",
         errors: validatedData.error.format(),
       });
+      return;
     }
+
+    const { email, password } = validatedData.data;
+
+    const existUser = await db.user.findFirst({
+      where: {
+        email: email,
+      },
+    });
+
+    if (!existUser) {
+      res.status(404).json({
+        success: false,
+        message: "User does not exist",
+      });
+      return;
+    }
+
+    // `existUser` is confirmed to exist at this point
+    const decodePassword = await bcrypt.compare(password, existUser.password);
+
+    if (!decodePassword) {
+      res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
+      return;
+    }
+
+    const payload = {
+      userId: existUser.id, // `existUser.id` is now safe to access
+      email: existUser.email,
+    };
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET is not defined in the environment variables");
+    }
+
+    const token = jwt.sign(payload, jwtSecret, {
+      expiresIn: "7d",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      existUser,
+      token,
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
